@@ -5,6 +5,10 @@ import { useFetch } from "#app";
 import type { Usuario } from "@/interfaces/usuario.interface";
 import { useCookie } from "#app";
 
+definePageMeta({
+  middleware: "admin",
+});
+  
 const baseURL = useCookie("BASE_URL");
 if (!baseURL.value) baseURL.value = "http://localhost:3020";
 
@@ -16,7 +20,7 @@ const userData = computed(() => {
       ? JSON.parse(userLogin.value)
       : userLogin.value;
   } catch (error) {
-    console.error("❌ Error al parsear userLogin:", error);
+    console.error("Error al parsear userLogin:", error);
     return {};
   }
 });
@@ -26,6 +30,7 @@ const token = computed(() => userData.value?.token || "");
 const usuarios = ref<Usuario[]>([]);
 const dialog = ref(false);
 const confirmDialog = ref(false);
+const dialogEditar = ref(false);
 const modalTitle = ref("Nuevo Usuario");
 const selectedUserIndex = ref<number | null>(null);
 const userToDelete = ref<Usuario | null>(null);
@@ -71,7 +76,7 @@ const loadUsuarios = async () => {
       usuarios.value = res.data.value.data;
     }
   } catch (error) {
-    console.error("❌ Error al cargar usuarios:", error);
+    console.error("Error al cargar usuarios:", error);
   }
 };
 
@@ -86,8 +91,8 @@ const onClickNewUser = () => {
 // Abrir modal para editar usuario
 const onClickEditUser = (user: Usuario, index: number) => {
   modalTitle.value = "Editar Usuario";
-  dialog.value = true;
-  userEdit.value = JSON.parse(JSON.stringify(user)); // ✅ Asegurar copia profunda
+  dialogEditar.value = true;
+  userEdit.value = JSON.parse(JSON.stringify(user));
   selectedUserIndex.value = index;
 };
 const onClickDeleteUser = (user: Usuario, index: number) => {
@@ -114,42 +119,31 @@ const confirmDeleteUser = async () => {
   }
 };
 
-// Guardar usuario (Crear o Editar)
+// Guardar usuario (Crear)
 const saveUser = async () => {
   if (!token.value) return;
 
-  const isEditing = selectedUserIndex.value !== null;
-  const method = isEditing ? "PUT" : "POST";
-  const url = isEditing ? `${baseURL.value}/usuario/${userEdit.value.id}` : `${baseURL.value}/usuario`;
-
   const userToSend: Partial<Usuario> = { ...userEdit.value };
-
-  // ✅ Asegurar que el rol se envía correctamente
-  if (!userToSend.rol) {
-    userToSend.rol = "ADMIN"; // Default si no se ha seleccionado
-  }
-
-  if (isEditing && !userToSend.password) {
-    delete userToSend.password;
-  }
 
   console.log("📤 Enviando usuario al backend:", JSON.stringify(userToSend));
 
   try {
-    const res = await useFetch<{ success: boolean; data: Usuario }>(url, {
-      method,
-      headers: { Authorization: `Bearer ${token.value}`, "Content-Type": "application/json" },
-      body: JSON.stringify(userToSend),
-    });
+    const res = await useFetch<{ success: boolean; data: Usuario }>(
+      `${baseURL.value}/usuario`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userToSend),
+      }
+    );
 
     if (res.data?.value?.success) {
-      if (isEditing && selectedUserIndex.value !== null) {
-        usuarios.value[selectedUserIndex.value] = res.data.value.data;
-      } else {
-        usuarios.value.push(res.data.value.data);
-      }
+      usuarios.value.push(res.data.value.data);
       dialog.value = false;
-      showSnackbar(isEditing ? "Usuario actualizado exitosamente." : "Usuario creado exitosamente.");
+      showSnackbar("Usuario creado exitosamente.");
       loadUsuarios();
     } else {
       console.error("❌ Error en la respuesta del servidor:", res.data?.value);
@@ -158,6 +152,61 @@ const saveUser = async () => {
     console.error("❌ Error al guardar usuario:", error);
   }
 };
+
+
+// **Actualizar usuario**
+const updateUser = async () => {
+  if (!token.value || selectedUserIndex.value === null) return;
+
+  if (!userEdit.value.id) {
+    console.error("⚠ Error: Falta el ID del usuario");
+    return;
+  }
+
+  if (!userEdit.value.rol) {
+    userEdit.value.rol = "ADMIN"; 
+  }
+
+  // Clonamos el objeto usuario para asegurarnos de no modificar el estado original
+  const userToSend: Partial<Usuario> = { ...userEdit.value };
+
+  // **Asegurarnos de que el campo `password` realmente está vacío**
+  console.log("🛠 Revisando `password` antes de enviar:", userToSend.password);
+
+  // **Si la contraseña está vacía o nula, eliminarla**
+  if (!userToSend.password || userToSend.password.trim() === "") {
+    delete userToSend.password;
+  }
+
+
+  try {
+    const res = await useFetch<{ success: boolean; data: Usuario }>(
+      `${baseURL.value}/usuario`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userToSend),
+      }
+    );
+
+    if (res.data?.value?.success) {
+      usuarios.value[selectedUserIndex.value] = res.data.value.data;
+      dialogEditar.value = false;
+      showSnackbar("Usuario actualizado exitosamente.");
+      loadUsuarios();
+    } else {
+      console.error("❌ Error en la respuesta del servidor:", res.data?.value);
+    }
+  } catch (error) {
+    console.error("❌ Error al actualizar usuario:", error);
+  }
+};
+
+
+
 
 // Mostrar notificación
 const showSnackbar = (message: string) => {
@@ -212,27 +261,34 @@ onMounted(() => {
       </v-table>
     </v-card>
 
-    <!-- Modal para Crear y editar Usuario -->
-    <v-dialog v-model="dialog" max-width="500">
+      <!-- Modal para Crear usuario -->
+      <v-dialog v-model="dialog" max-width="500">
       <v-card>
-        <v-card-title>{{ modalTitle }}</v-card-title>
+        <v-card-title>Nuevo Usuario</v-card-title>
         <v-card-text>
           <v-text-field label="Nombre" v-model="userEdit.nombres" />
           <v-text-field label="Email" v-model="userEdit.email" />
-          <v-select
-            label="Rol"
-            v-model="userEdit.rol"
-            :items="['ADMIN', 'REGULAR']"
-          />
-          <v-text-field
-            label="Contraseña"
-            v-model="userEdit.password"
-            type="password"
-          />
+          <v-text-field label="Contraseña" v-model="userEdit.password" type="password" />
         </v-card-text>
         <v-card-actions>
           <v-btn @click="dialog = false">Cancelar</v-btn>
           <v-btn color="primary" @click="saveUser">Guardar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Modal para editar Usuario -->
+    <v-dialog v-model="dialogEditar" max-width="500">
+      <v-card>
+        <v-card-title>Editar Usuario</v-card-title>
+        <v-card-text>
+          <v-text-field label="Nombre" v-model="userEdit.nombres" />
+          <v-text-field label="Email" v-model="userEdit.email" />
+          <v-select label="Rol" v-model="userEdit.rol" :items="['ADMIN', 'REGULAR']" />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn @click="dialogEditar = false">Cancelar</v-btn>
+          <v-btn color="primary" @click="updateUser">Actualizar</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

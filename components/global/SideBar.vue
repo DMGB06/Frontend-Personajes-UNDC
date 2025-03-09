@@ -2,6 +2,7 @@
 import { useDisplay } from "vuetify";
 import type { Company } from "~/interfaces/Company.interface";
 import type { Login } from "~/interfaces/Login.Interface";
+
 const drawer = useCookie<boolean>("drawer");
 const rail = useCookie<boolean>("rail");
 rail.value = false;
@@ -11,10 +12,8 @@ const userCookie = useCookie<string | Login>("user");
 
 const user = computed(() => {
   if (!userCookie.value) return null;
-
   try {
-    return typeof userCookie.value === "string" &&
-      userCookie.value.startsWith("{")
+    return typeof userCookie.value === "string" && userCookie.value.startsWith("{")
       ? JSON.parse(userCookie.value)
       : userCookie.value;
   } catch (error) {
@@ -23,57 +22,35 @@ const user = computed(() => {
   }
 });
 
-
-
 const company = useCookie<Company>("company");
 company.value = {
   name: "UNDC",
   logo: "https://www.undc.edu.ar/wp-content/uploads/2020/03/logo-undc.png",
 };
+
+// Función para validar si el usuario tiene un rol permitido
 const isRule = (rule: string[]) => {
-  if (!user.value) return false;
-  if (!user.value.rol) return false; // Cambiado de tipoUsuario a rol
-  return rule.includes(user.value.rol); // Verifica si el rol está en la lista permitida
+  if (!user.value || !user.value.rol) return false;
+  return rule.includes(user.value.rol);
 };
 
+// Definición de los menús
 const menus = ref([
+  { icon: "mdi-home", title: "Inicio", value: "inicio", to: "/inicio", view: true },
+  { icon: "mdi-post-outline", title: "Post", value: "post", to: "/post", view: true },
   {
-    icon: "mdi-sale",
-    title: "Inicio",
-    value: "inicio",
-    to: "/inicio",
-    view: true,
-  },
-  {
-    icon: "mdi-animation",
-    title: "Post",
-    value: "post",
-    to: "/post",
-    view: true,
-  },
-  {
-    icon: "mdi-animation",
+    icon: "mdi-cog-outline",
     title: "Configuraciones",
     value: "config",
     to: "#",
-    view: isRule(["ADMIN"]), // ✅ Se usa isRule con rol corregido
+    view: isRule(["ADMIN"]),
     toSub: [
-      {
-        title: "Usuarios",
-        value: "usuarios",
-        to: "/configurations/usuarios",
-        view: isRule(["ADMIN"]),
-      },
-      {
-        title: "Avanzado",
-        value: "avanzado",
-        to: "/configurations/avanzado",
-        view: isRule(["ADMIN"]),
-      },
+      { icon: "mdi-account-multiple", title: "Usuarios", value: "usuarios", to: "/configurations/usuarios", view: isRule(["ADMIN"]) }
     ],
   },
 ]);
 </script>
+
 <template>
   <v-navigation-drawer
     expand-on-hover
@@ -127,8 +104,20 @@ const menus = ref([
   </v-navigation-drawer>
 </template>
 
-<style>
+
+<style scoped>
+/* Espaciado limpio en la lista */
 .v-list-group__items {
   --indent-padding: -0.5rem !important;
+}
+
+/* Mejor apariencia de los iconos */
+.v-list-item__prepend-icon {
+  color: white;
+}
+
+/* Ajustes para iconos en rail */
+.v-navigation-drawer[rail] .v-list-item {
+  justify-content: center;
 }
 </style>
