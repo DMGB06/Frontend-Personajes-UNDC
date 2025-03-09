@@ -167,12 +167,12 @@ const updateUser = async () => {
     userEdit.value.rol = "ADMIN"; 
   }
 
-  // Clonamos el objeto usuario para asegurarnos de no modificar el estado original
+  // Clonamos el objeto usuario para asegurarnos de no modificar el estadso original
   const userToSend: Partial<Usuario> = { ...userEdit.value };
 
   // **Asegurarnos de que el campo `password` realmente está vacío**
   console.log("🛠 Revisando `password` antes de enviar:", userToSend.password);
-
+  console.log("📤 Enviando usuario al backend:", JSON.stringify(userToSend));
   // **Si la contraseña está vacía o nula, eliminarla**
   if (!userToSend.password || userToSend.password.trim() === "") {
     delete userToSend.password;
